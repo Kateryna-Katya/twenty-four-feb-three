@@ -1,147 +1,122 @@
-import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js';
-
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- 1. Инициализация иконок ---
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    // 1. Инициализация иконок
+    lucide.createIcons();
 
-    // --- 2. Мобильное меню («Бургер») ---
+    // 2. Плавный скролл Lenis
+    const lenis = new Lenis();
+    function raf(time) {
+        lenis.raf(time);
+        requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+
+    // 3. Мобильное меню
     const burger = document.querySelector('.burger');
     const mobileMenu = document.querySelector('.mobile-menu');
-    const closeMenu = document.querySelector('.mobile-menu__close');
-    const menuLinks = document.querySelectorAll('.mobile-menu__link');
+    const mobileLinks = document.querySelectorAll('.mobile-nav a');
 
-    const toggleMenu = () => mobileMenu.classList.toggle('mobile-menu--active');
+    if (burger && mobileMenu) {
+        const toggleMenu = () => {
+            burger.classList.toggle('active');
+            mobileMenu.classList.toggle('active');
+            document.body.style.overflow = mobileMenu.classList.contains('active') ? 'hidden' : '';
+        };
+        burger.addEventListener('click', toggleMenu);
+        mobileLinks.forEach(link => link.addEventListener('click', toggleMenu));
+    }
 
-    burger?.addEventListener('click', toggleMenu);
-    closeMenu?.addEventListener('click', toggleMenu);
-    menuLinks.forEach(link => link.addEventListener('click', toggleMenu));
+    // --- 4. АНИМАЦИЯ HERO (ИСПРАВЛЕННАЯ) ---
+    // Сначала проверим наличие текста
+    const heroTitleElement = document.querySelector('#hero-text');
+    
+    if (heroTitleElement) {
+        const heroText = new SplitType('#hero-text', { types: 'words, chars' });
+        
+        // Прячем элементы ПЕРЕД началом анимации через JS
+        gsap.set(['.hero-description', '.hero-btns'], { autoAlpha: 0, y: 30 });
+        gsap.set('.char', { opacity: 0, y: 50 });
 
-    // --- 3. Header Scroll Effect ---
-    const header = document.querySelector('.header');
-    window.addEventListener('scroll', () => {
-        header?.classList.toggle('header--scrolled', window.scrollY > 50);
+        const tlHero = gsap.timeline({ defaults: { ease: 'power4.out' } });
+
+        tlHero.to('.char', {
+            opacity: 1,
+            y: 0,
+            duration: 1,
+            stagger: 0.02,
+        })
+        .to('.hero-description', {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.8
+        }, '-=0.6')
+        .to('.hero-btns', {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.8
+        }, '-=0.6');
+    }
+
+    // 5. Глобальная анимация секций (через autoAlpha для надежности)
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Анимируем карточки и списки
+    const revealElements = document.querySelectorAll('.about-card, .price-card, .case-card, .tools-list li');
+    
+    revealElements.forEach((el) => {
+        gsap.from(el, {
+            scrollTrigger: {
+                trigger: el,
+                start: 'top 90%',
+                toggleActions: 'play none none none' // Проигрывать только один раз
+            },
+            y: 30,
+            autoAlpha: 0,
+            duration: 1,
+            ease: 'power2.out'
+        });
     });
 
-    // --- 4. Three.js Hero Scene ---
-    const initHeroScene = () => {
-        const container = document.getElementById('hero-canvas');
-        if (!container) return;
-
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        container.appendChild(renderer.domElement);
-
-        const geometry = new THREE.BufferGeometry();
-        const vertices = [];
-        for (let i = 0; i < 4000; i++) {
-            vertices.push(THREE.MathUtils.randFloatSpread(2000), THREE.MathUtils.randFloatSpread(2000), THREE.MathUtils.randFloatSpread(2000));
-        }
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        const points = new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0x635BFF, size: 2, transparent: true, opacity: 0.6 }));
-        scene.add(points);
-        camera.position.z = 1000;
-
-        let mouseX = 0, mouseY = 0;
-        document.addEventListener('mousemove', (e) => {
-            mouseX = (e.clientX - window.innerWidth / 2) / 150;
-            mouseY = (e.clientY - window.innerHeight / 2) / 150;
+    // 6. Валидация телефона и Капча (как в предыдущем шаге)
+    const phoneInput = document.getElementById('phone-input');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '');
         });
+    }
 
-        const animate = () => {
-            requestAnimationFrame(animate);
-            points.rotation.x += 0.0005; points.rotation.y += 0.0005;
-            camera.position.x += (mouseX - camera.position.x) * 0.05;
-            camera.position.y += (-mouseY - camera.position.y) * 0.05;
-            camera.lookAt(scene.position);
-            renderer.render(scene, camera);
-        };
-        animate();
-    };
+    const captchaLabel = document.getElementById('captcha-label');
+    const captchaInput = document.getElementById('captcha-input');
+    if (captchaLabel) {
+        const n1 = Math.floor(Math.random() * 10);
+        const n2 = Math.floor(Math.random() * 10);
+        const correct = n1 + n2;
+        captchaLabel.innerText = `Сколько будет ${n1} + ${n2}?`;
 
-    // --- 5. Image Morphing (Strategies) ---
-    const initStrategyMorph = () => {
-        const items = document.querySelectorAll('.strategy-item');
-        const morphImg = document.querySelector('.morph-img');
-        const shapes = {
-            circle: 'circle(45% at 50% 50%)',
-            polygon: 'polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)',
-            blob: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)'
-        };
-        items.forEach(item => {
-            item.addEventListener('mouseenter', () => {
-                items.forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                if(morphImg) morphImg.style.clipPath = shapes[item.dataset.shape] || shapes.circle;
-            });
-        });
-    };
-
-    // --- 6. Контактная форма + Валидация телефона + Капча ---
-    const initContactForm = () => {
-        const form = document.getElementById('ajax-form');
-        const phoneInput = document.getElementById('phone');
-        const questionEl = document.getElementById('captcha-question');
-        const messageEl = document.getElementById('form-message');
-
-        if (!form) return;
-
-        // Валидация телефона (только цифры и +)
-        phoneInput?.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/[^\d+]/g, '');
-        });
-
-        // Генерация капчи
-        let n1 = Math.floor(Math.random() * 10), n2 = Math.floor(Math.random() * 10);
-        if(questionEl) questionEl.textContent = `${n1} + ${n2}`;
-
-        form.addEventListener('submit', async (e) => {
+        const form = document.getElementById('ai-form');
+        form.addEventListener('submit', (e) => {
             e.preventDefault();
-            const answer = parseInt(document.getElementById('captcha-answer').value);
-            if (answer !== (n1 + n2)) {
-                messageEl.textContent = "Ошибка капчи!";
-                messageEl.className = "form-message error";
+            if (parseInt(captchaInput.value) !== correct) {
+                alert('Капча введена неверно!');
                 return;
             }
-
             const btn = form.querySelector('button');
-            btn.disabled = true; btn.textContent = "Отправка...";
-
-            await new Promise(r => setTimeout(r, 1500)); // Имитация AJAX
-            
-            messageEl.textContent = "Успешно отправлено!";
-            messageEl.className = "form-message success";
-            form.reset();
-            btn.disabled = false; btn.innerHTML = 'Отправить запрос <i data-lucide="send"></i>';
-            if (typeof lucide !== 'undefined') lucide.createIcons();
+            btn.innerText = 'Отправка...';
+            setTimeout(() => {
+                form.reset();
+                btn.style.display = 'none';
+                document.getElementById('form-success').style.display = 'block';
+            }, 1500);
         });
-    };
+    }
 
-    // --- 7. Cookie Popup ---
-    const initCookiePopup = () => {
-        const popup = document.getElementById('cookie-popup');
-        const acceptBtn = document.getElementById('cookie-accept');
-        if (!localStorage.getItem('cookies_accepted')) {
-            setTimeout(() => popup?.classList.add('cookie-popup--active'), 2000);
-        }
-        acceptBtn?.addEventListener('click', () => {
-            localStorage.setItem('cookies_accepted', 'true');
-            popup?.classList.remove('cookie-popup--active');
-        });
-    };
-
-    // --- Запуск ---
-    initHeroScene();
-    initStrategyMorph();
-    initContactForm();
-    initCookiePopup();
-    if (typeof Swiper !== 'undefined') {
-        new Swiper('.insights-slider', {
-            slidesPerView: 1, spaceBetween: 30, loop: true,
-            navigation: { nextEl: '.swiper-button-next-custom', prevEl: '.swiper-button-prev-custom' },
-            breakpoints: { 768: { slidesPerView: 2 }, 1024: { slidesPerView: 3 } }
+    // 7. Cookie Popup
+    const cp = document.getElementById('cookie-popup');
+    if (cp && !localStorage.getItem('cookies-accepted')) {
+        setTimeout(() => cp.classList.add('active'), 2000);
+        document.getElementById('accept-cookies').addEventListener('click', () => {
+            localStorage.setItem('cookies-accepted', 'true');
+            cp.classList.remove('active');
         });
     }
 });
